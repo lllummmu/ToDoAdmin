@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>注册新用户</title>
+    <script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <style>
+        body { font-family: "Microsoft YaHei", sans-serif; margin: 40px; }
+        input[type=text], input[type=password] {
+            width: 220px; padding: 6px; margin: 6px 0; display: block;
+        }
+        button { padding: 6px 18px; margin-top: 10px; }
+        .msg { color: red; margin-top: 8px; }
+    </style>
+</head>
+<body>
+<div id="app">
+    <h2>注册新用户</h2>
+
+    <input v-model="username" placeholder="用户名"/>
+    <input type="password" v-model="password" placeholder="密码"/>
+    <button @click="register">创建用户</button>
+
+    <p class="msg">{{ msg }}</p>
+    <hr>
+    <a href="login.html">← 返回登录</a>
+</div>
+
+<script>
+    const { createApp } = Vue;
+    createApp({
+        data() {
+            return {
+                username: '',
+                password: '',
+                msg: ''
+            }
+        },
+        methods: {
+            register() {
+                if (!this.username || !this.password) {
+                    this.msg = '用户名和密码都不能为空';
+                    return;
+                }
+                axios.post('register', new URLSearchParams({
+                    username: this.username,
+                    password: this.password
+                })).then(res => {
+                    if (res.data === 'success') {
+                        this.msg = '注册成功，即将跳转登录...';
+                        setTimeout(() => location.href = 'login.html', 1200);
+                    } else if (res.data === 'exist') {
+                        this.msg = '用户名已存在';
+                    } else {
+                        this.msg = '注册失败';
+                    }
+                }).catch(() => this.msg = '网络错误');
+            }
+        }
+    }).mount('#app');
+</script>
+</body>
+</html>

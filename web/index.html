@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>任务大厅</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <style>
+        .high{color:#dc3545 !important;}
+        .medium{color:#fd7e14 !important;}
+        .low{color:#28a745 !important;}
+        .table-danger td{background-color:#f8d7da !important;}
+    </style>
+</head>
+<body>
+<div id="app" class="container py-4">
+    <!-- 当前用户 -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h5>欢迎，{{ userName }}</h5>
+            <small>创建：{{ myCreate }} / 被指：{{ myAssign }} / 完成率：{{ percent }}%</small>
+        </div>
+        <button class="btn btn-sm btn-outline-danger" @click="logout">退出</button>
+    </div>
+
+    <!-- 统计面板 -->
+    <div class="row text-center mb-3 p-2 bg-light rounded">
+        <div class="col"><div class="h6 mb-0">总任务</div><div class="h4">{{ stat.total }}</div></div>
+        <div class="col"><div class="h6 mb-0">已完成</div><div class="h4 text-success">{{ stat.done }}</div></div>
+        <div class="col"><div class="h6 mb-0">未完成</div><div class="h4 text-warning">{{ stat.undone }}</div></div>
+        <div class="col"><div class="h6 mb-0">即将到期</div><div class="h4 text-danger">{{ stat.dueSoon }}</div></div>
+    </div>
+
+    <!-- 新增任务 -->
+    <div class="card mb-4">
+        <div class="card-header">新增任务</div>
+        <div class="card-body">
+            <div class="row g-2">
+                <div class="col-md-4"><input class="form-control" v-model="newTask.text" placeholder="任务内容"></div>
+                <div class="col-md-2">
+                    <select class="form-select" v-model="newTask.priority">
+                        <option value="high">高</option><option value="medium">中</option><option value="low">低</option>
+                    </select>
+                </div>
+                <div class="col-md-3"><input class="form-control" type="datetime-local" v-model="newTask.due_date"></div>
+                <div class="col-md-2">
+                    <select class="form-select" v-model="newTask.assignee_id">
+                        <option :value="null">请选择执行人</option>
+                        <option v-for="u in users" :key="u.id" :value="u.id">{{ u.username }}</option>
+                    </select>
+                </div>
+                <div class="col-md-1"><button class="btn btn-primary w-100" @click="addTask">添加</button></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 搜索/筛选/排序 -->
+    <div class="card mb-3">
+        <div class="card-body row g-2">
+            <div class="col-md-3"><input class="form-control" v-model="filter.key" placeholder="关键词"></div>
+            <!-- ✅ 状态筛选：新增“自己创建 / 指派给我” -->
+            <div class="col-md-2">
+                <select class="form-select" v-model="filter.status">
+                    <option value="all">所有任务</option>
+                    <option value="done">已完成任务</option>
+                    <option value="undone">未完成任务</option>
+                    <option value="myCreate">自己创建的任务</option>
+                    <option value="myAssign">被指派的任务</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <select class="form-select" v-model="filter.priority">
+                    <option value="all">所有优先级</option>
+                    <option value="high">高</option><option value="medium">中</option><option value="low">低</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <select class="form-select" v-model="sortType">
+                    <option value="date-asc">截止↑</option><option value="date-desc">截止↓</option>
+                    <option value="pri-desc">优先级↓</option><option value="create-desc">创建时间↓</option>
+                </select>
+            </div>
+            <div class="col-md-2"><button class="btn btn-outline-secondary w-100" @click="resetFilter">重置</button></div>
+        </div>
+    </div>
+
+    <!-- 任务列表 -->
+    <div class="card">
+        <div class="card-header">任务列表</div>
+        <div class="card-body p-0">
+            <table class="table table-hover mb-0">
+                <thead><tr>
+                    <th>内容</th><th>优先级</th><th>执行人</th><th>截止</th><th>状态</th><th width="80">操作</th>
+                </tr></thead>
+                <tbody>
+                <tr v-for="t in displayedTasks" :key="t.id"
+                    :class="{'table-danger':isOverdue(t.dueDate)&&!t.completed}">
+                    <td>{{ t.text }}</td>
+                    <td><span :class="t.priority">{{ t.priority.toUpperCase() }}</span></td>
+                    <td>{{ t.assigneeName||'—' }}</td>
+                    <td>{{ fmtDate(t.dueDate) }}</td>
+                    <td>
+                        <span v-if="t.completed" class="badge bg-success">已完成</span>
+                        <span v-else class="badge bg-warning text-dark">未完成</span>
+                    </td>
+                    <td>
+                        <button v-if="!t.completed" class="btn btn-sm btn-outline-primary me-1" @click="toggleDone(t)">完成</button>
+                        <button class="btn btn-sm btn-outline-danger" @click="deleteTask(t.id)">删除</button>
+                    </td>
+                </tr>
+                </tbody>
+            </table>
+            <div v-if="displayedTasks.length===0" class="text-center py-4 text-muted">暂无匹配任务</div>
+        </div>
+    </div>
+
+    <!-- 分页 -->
+    <nav class="mt-3 d-flex justify-content-center">
+        <ul class="pagination pagination-sm">
+            <li class="page-item" :class="{disabled:page===1}"><a class="page-link" @click="page--">‹</a></li>
+            <li class="page-item" v-for="p in pages" :key="p" :class="{active:p===page}">
+                <a class="page-link" @click="page=p">{{ p }}</a>
+            </li>
+            <li class="page-item" :class="{disabled:page===totalPages}"><a class="page-link" @click="page++">›</a></li>
+        </ul>
+    </nav>
+</div>
+
+<script>
+    const { createApp } = Vue;
+    createApp({
+        data(){
+            return {
+                userName: sessionStorage.getItem('userName')||'',
+                users:[], tasks:[],
+                newTask:{text:'',priority:'medium',due_date:'',assignee_id:null},
+                filter:{key:'',status:'all',priority:'all'},
+                sortType:'date-asc', page:1, size:6
+            };
+        },
+        computed:{
+            stat(){
+                const now=new Date();
+                return {
+                    total:this.tasks.length,
+                    done:this.tasks.filter(t=>t.completed).length,
+                    undone:this.tasks.filter(t=>!t.completed).length,
+                    dueSoon:this.tasks.filter(t=>!t.completed&&t.dueDate&&new Date(t.dueDate)-now<24*3600*1000).length
+                };
+            },
+            myCreate(){ return this.tasks.filter(t=>t.userId===this.getUserId()).length; },
+            myAssign(){ return this.tasks.filter(t=>t.assigneeId===this.getUserId()).length; },
+            percent(){
+                const c=this.tasks.filter(t=>t.userId===this.getUserId()&&t.completed).length;
+                const tot=this.tasks.filter(t=>t.userId===this.getUserId()).length;
+                return tot?Math.round(c/tot*100):0;
+            },
+            filteredTasks(){
+                let list=this.tasks.filter(t=>{
+                    // ✅ 关键词
+                    const k=this.filter.key.trim();
+                    if(k&&!t.text.toLowerCase().includes(k.toLowerCase())) return false;
+                    // ✅ 优先级
+                    if(this.filter.priority!=='all'&&t.priority!==this.filter.priority) return false;
+                    // ✅ 状态（含“自己创建 / 被指任务”）
+                    if(this.filter.status==='done'&&!t.completed) return false;
+                    if(this.filter.status==='undone'&&t.completed) return false;
+                    if(this.filter.status==='myCreate'&&t.userId!==this.getUserId()) return false;
+                    if(this.filter.status==='myAssign'&&t.assigneeId!==this.getUserId()) return false;
+                    return true;
+                });
+                // ✅ 排序
+                list.sort((a,b)=>{
+                    switch(this.sortType){
+                        case 'date-asc':  return new Date(a.dueDate||'9999')-new Date(b.dueDate||'9999');
+                        case 'date-desc': return new Date(b.dueDate||'9999')-new Date(a.dueDate||'9999');
+                        case 'pri-desc':  return ['high','medium','low'].indexOf(b.priority)-['high','medium','low'].indexOf(a.priority);
+                        case 'create-desc':return new Date(b.createdAt)-new Date(a.createdAt);
+                    } return 0;
+                });
+                return list;
+            },
+            displayedTasks(){
+                const start=(this.page-1)*this.size;
+                return this.filteredTasks.slice(start,start+this.size);
+            },
+            totalPages(){ return Math.ceil(this.filteredTasks.length/this.size); },
+            pages(){
+                const p=[];
+                for(let i=1;i<=this.totalPages;i++) p.push(i);
+                return p;
+            }
+        },
+        methods:{
+            getUserId(){
+                if(!this.tasks.length) return -1;
+                const t=this.tasks.find(t=>t.userId)||this.tasks[0];
+                return t.userId;
+            },
+            loadBase(){
+                axios.get('users').then(res=>this.users=res.data);
+                axios.get('tasks').then(res=>{ this.tasks=res.data; this.buildAssignee(); });
+            },
+            buildAssignee(){
+                this.tasks.forEach(t=>{
+                    const u=this.users.find(x=>x.id===t.assigneeId);
+                    t.assigneeName=u?u.username:null;
+                });
+            },
+            fmtDate(d){ if(!d)return'—'; const dt=new Date(d);
+                return dt.getFullYear()+'/'+String(dt.getMonth()+1).padStart(2,'0')+'/'+String(dt.getDate()).padStart(2,'0')+' '+
+                    String(dt.getHours()).padStart(2,'0')+':'+String(dt.getMinutes()).padStart(2,'0'); },
+            isOverdue(d){ return d&&new Date(d)<new Date();},
+            addTask(){
+                if(!this.newTask.text){ alert('请输入内容');return; }
+                axios.post('tasks',new URLSearchParams(this.newTask)).then(res=>{
+                    if(res.data==='success'){ this.newTask={text:'',priority:'medium',due_date:'',assignee_id:null}; this.loadBase(); }
+                    else alert('添加失败');
+                });
+            },
+            toggleDone(t){
+                t.completed=!t.completed;
+                axios.put('tasks/'+t.id,new URLSearchParams({completed:t.completed})).then(()=>this.loadBase());
+            },
+            deleteTask(id){
+                if(!confirm('确定删除？'))return;
+                axios.delete('tasks?id='+id).then(()=>this.loadBase());
+            },
+            resetFilter(){ this.filter={key:'',status:'all',priority:'all'}; this.page=1; },
+            logout(){ sessionStorage.clear(); location.href='login.html'; }
+        },
+        mounted(){ this.loadBase(); }
+    }).mount('#app');
+</script>
+</body>
+</html>
