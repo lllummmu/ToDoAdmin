@@ -6,7 +6,7 @@ import java.sql.DriverManager;
 public class DBUtil {
     private static final String URL = "jdbc:mysql://localhost:3306/todo_app?useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=UTF-8";
     private static final String USER = "root";
-    private static final String PASSWORD = "Zhou.314";
+    private static final String PASSWORD = "******";
 
     static {
         try {
