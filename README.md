@@ -9,7 +9,7 @@
 | 层 | 技术 |
 | --- | --- |
 | 前端（工程化） | Vue 3 Composition API、TypeScript、Vite、Element Plus、Pinia、Vue Router、Axios、ECharts、marked |
-| 前端（课程版） | Vue 3 CDN、Bootstrap 5、Axios（保留原样，可直接提交作业） |
+| 前端（课程版） | Vue 3 CDN、Bootstrap 5、Axios（保留原样） |
 | 后端 | Java 8、Servlet 4.0、JDBC、Gson |
 | 数据库 | MySQL 8（todo_app 库，users / tasks 表，utf8mb4 + InnoDB） |
 | 部署 | Tomcat 8.5（端口 8081）+ Vite Dev Server（端口 5173） |
